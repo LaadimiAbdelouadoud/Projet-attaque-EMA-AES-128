@@ -1,0 +1,105 @@
+clear all;
+clc;
+close all;
+
+% Chemin vers le répertoire contenant les traces
+folderSrc = '/tmp/SECU8917/';  % À adapter
+
+% Nombre de traces attendu
+Nt = 20000;
+
+matrixFilelist = dir(folderSrc);
+sizeFilelist = size(matrixFilelist,1);
+
+Nti = 0;
+
+% Initialisation des matrices
+key = cell(Nt,1);
+pti = cell(Nt,1);
+cto = cell(Nt,1);
+
+fprintf('Chargement des traces...\n');
+
+% Parcourir tous les fichiers
+for i = 1:sizeFilelist
+    filename = matrixFilelist(i).name;
+    
+    % Chercher les fichiers trace_AES
+    if ~isempty(findstr('trace_AES', filename))
+        Nti = Nti + 1;
+        
+        % Parser le nom: trace_AES_NNNNNNN_key=XXX_pti=XXX_cto=XXX.csv
+        
+        % Méthode 1: Recherche directe des patterns
+        % Extraction de key
+        idx_key = strfind(filename, 'key=');
+        key_hex = filename(idx_key+4:idx_key+35);  % 32 caractères hex
+        key{Nti} = key_hex;
+        
+        % Extraction de pti
+        idx_pti = strfind(filename, 'pti=');
+        pti_hex = filename(idx_pti+4:idx_pti+35);
+        pti{Nti} = pti_hex;
+        
+        % Extraction de cto
+        idx_cto = strfind(filename, 'cto=');
+        cto_hex = filename(idx_cto+4:idx_cto+35);
+        cto{Nti} = cto_hex;
+        
+        % Charger la trace EM
+        trace = csvread(fullfile(folderSrc, filename));
+        L(Nti,:) = trace;
+        
+        % Affichage progression
+        if mod(Nti, 1000) == 0
+            fprintf('  %d traces chargées...\n', Nti);
+        end
+        
+        % Limiter au nombre de traces souhaité
+        if Nti >= Nt
+            break;
+        end
+    end
+end
+
+fprintf('Total: %d traces chargées\n', Nti);
+
+% Conversion hexadécimal -> décimal (16 octets par ligne)
+key_dec = zeros(Nti, 16);
+pti_dec = zeros(Nti, 16);
+cto_dec = zeros(Nti, 16);
+
+fprintf('Conversion hex -> decimal...\n');
+
+for i = 1:Nti
+    for j = 1:16
+        % Extraire 2 caractères hex par octet
+        key_dec(i,j) = hex2dec(key{i}((j-1)*2+1:j*2));
+        pti_dec(i,j) = hex2dec(pti{i}((j-1)*2+1:j*2));
+        cto_dec(i,j) = hex2dec(cto{i}((j-1)*2+1:j*2));
+    end
+end
+
+% Sauvegarder les données
+save('key_dec.mat','key_dec')
+save('pti_dec.mat','pti_dec')
+save('cto_dec.mat','cto_dec')
+save('L.mat','L', '-v7.3')  % Format v7.3 pour matrices volumineuses
+
+fprintf('\n=== Extraction terminée ===\n');
+fprintf('Traces: %d\n', Nti);
+fprintf('Samples par trace: %d\n', size(L,2));
+fprintf('Fichiers sauvegardés:\n');
+fprintf('  - key_dec.mat (%dx%d)\n', size(key_dec,1), size(key_dec,2));
+fprintf('  - pti_dec.mat (%dx%d)\n', size(pti_dec,1), size(pti_dec,2));
+fprintf('  - cto_dec.mat (%dx%d)\n', size(cto_dec,1), size(cto_dec,2));
+fprintf('  - L.mat (%dx%d)\n', size(L,1), size(L,2));
+
+% Affichage exemple première trace
+fprintf('\n=== Exemple trace #1 ===\n');
+fprintf('Key: %s\n', key{1});
+fprintf('Pti: %s\n', pti{1});
+fprintf('Cto: %s\n', cto{1});
+fprintf('Key_dec: ');
+fprintf('%02X ', key_dec(1,:));
+fprintf('\n');
